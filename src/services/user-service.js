@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 const UserRepository = require('../repository/user-repository');
 const { JWT_KEY } = require('../config/serverConfig');
 const bcrypt = require('bcrypt');
-const { response } = require('express');
 const AppErrors = require('../utils/error-handler');
 
 class UserService {
@@ -67,7 +66,7 @@ class UserService {
             const response = jwt.verify(token,JWT_KEY);
             return response;
         } catch (error) {
-            console.log("Something went wrong in token creation");
+            console.log("Something went wrong in token verify");
             throw error;
         }
     }
@@ -84,7 +83,7 @@ class UserService {
             }
             return user.id;
         } catch (error) {
-            
+            throw error;
         }
     }
 
