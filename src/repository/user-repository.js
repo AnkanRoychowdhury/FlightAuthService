@@ -3,19 +3,29 @@ const { User,Role } = require('../models/index');
 
 const ClientErrors = require('../utils/client-error');
 const ValidationError = require('../utils/validation-error');
+const AppErrors = require('../utils/error-handler');
 
+const CUSTOMER_ROLE_ID = 2;
 class UserRepository {
     
     async create(data) {
         try {
             const user = await User.create(data);
+            await user.addRole(CUSTOMER_ROLE_ID);
             return user;
         } catch (error) {
             if(error.name == 'SequelizeValidationError'){
                 throw new ValidationError(error);
             }
-            console.log("Something went wrong in Repository layer");
-            throw error;
+            else if(error.name == 'SequelizeUniqueConstraintError'){
+                throw new AppErrors(
+                    'ExistingUserError',
+                    'User is already exist',
+                    'Provided email already exist please login or signup using other email',
+                    StatusCodes.OK
+                );
+            }
+            throw new AppErrors();
         }
     }
 
@@ -28,7 +38,6 @@ class UserRepository {
             });
             return true;
         } catch (error) {
-            console.log("Something went wrong in Repository layer");
             throw error;
         }
     }
@@ -39,8 +48,12 @@ class UserRepository {
             });
             return user;
         } catch (error) {
-            console.log("Something went wrong in Repository layer");
-            throw error;
+            throw new AppErrors(
+                "UserNotFound",
+                "User doesn't exist",
+                "Something went wrong",
+                StatusCodes.INTERNAL_SERVER_ERROR
+            );
         }
     }
 
@@ -73,9 +86,9 @@ class UserRepository {
                     name: 'ADMIN'
                 }
             });
-            return user.hasRole(adminRole);
+            return await user.hasRole(adminRole);
         } catch (error) {
-            
+            throw error;
         }
     }
 }

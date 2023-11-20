@@ -1,30 +1,24 @@
 const jwt = require('jsonwebtoken');
-
-const UserRepository = require('../repository/user-repository');
-const { JWT_KEY } = require('../config/serverConfig');
 const bcrypt = require('bcrypt');
 const AppErrors = require('../utils/error-handler');
+const UserRepository = require('../repository/user-repository');
+
+const { JWT_KEY } = require('../config/serverConfig');
+const { ServerErrorCodes } = require('../utils/error-codes');
+const { StatusCodes } = require('http-status-codes');
 
 class UserService {
     constructor() {
         this.userRepository = new UserRepository();
     }
 
-    async create (data) {
+    async signUp (data) {
         try {
             const user = await this.userRepository.create(data);
-            return user;
+            const newJWT = await this.createToken({email: user.email,id:user.id});
+            return newJWT;
         } catch (error) {
-            if(error.name == 'SequelizeValidationError'){
-                throw error;
-            }
-            console.log("Something went wrong in Service layer");
-            throw new AppErrors(
-                'ServerError',
-                'Something went wrong in service layer',
-                'Logical issue found',
-                500
-            );
+            throw error;
         }
     }
 
@@ -37,8 +31,12 @@ class UserService {
             const user = await this.userRepository.getUserByEmail(email);
             const matchPassword = this.#checkPassword(plainPassword,user.password);
             if(!matchPassword){
-                console.log("Password doesn't match");
-                throw {error: 'Incorrect password'}
+                throw new AppErrors(
+                    'EmailNotFound',
+                    'Please check your email & password',
+                    "User doesn't exist with the given email & password",
+                    StatusCodes.NOT_FOUND
+                );
             }
             const newJWT = this.createToken({email: user.email,id:user.id});
             return newJWT;
@@ -46,18 +44,21 @@ class UserService {
             if(error.name == 'EmailNotFound'){
                 throw error;
             }
-            console.log("Something went wrong during signin");
             throw error;
         }
     }
 
-    createToken(user) {
+    async createToken(user) {
         try {
             const result = jwt.sign(user,JWT_KEY, {expiresIn: '1h'});
             return result;
         } catch (error) {
-            console.log("Something went wrong in token creation");
-            throw error;
+            throw new AppErrors(
+                'TokenIssue',
+                "Token creation failed",
+                "Something went wrong",
+                StatusCodes.INTERNAL_SERVER_ERROR
+            );
         }
     }
 
@@ -66,8 +67,12 @@ class UserService {
             const response = jwt.verify(token,JWT_KEY);
             return response;
         } catch (error) {
-            console.log("Something went wrong in token verify");
-            throw error;
+            throw new AppErrors(
+                'TokenIssue',
+                "Invalid Token",
+                "Please check your Access Token",
+                StatusCodes.BAD_REQUEST
+            );
         }
     }
 
@@ -91,16 +96,23 @@ class UserService {
         try {
             return bcrypt.compareSync(userInputPassword, encryptedPassword);
         } catch (error) {
-            console.log("Something went wrong in password checking");
             throw error;
         }
     }
 
-    isAdmin(userId){
+    async isAdmin(userId){
         try {
-            return this.userRepository.isAdmin(userId);
+            const response = await this.userRepository.isAdmin(userId);
+            if(!response){
+                throw new AppErrors(
+                    "AuthorizationIssue",
+                    "Not Authorized",
+                    "User is not authorized as Admin",
+                    StatusCodes.UNAUTHORIZED
+                );
+            }
+            return response;
         } catch (error) {
-            console.log("Something went wrong in Service layer");
             throw error;
         }
     }
